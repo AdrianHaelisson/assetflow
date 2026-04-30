@@ -1,120 +1,218 @@
 # AssetFlow
 
-O **AssetFlow** é um sistema Multi-tenant de gestão de ativos patrimoniais voltado para escritórios de contabilidade e seus clientes. Ele permite gerenciar todo o ciclo de vida de hardwares e licenças de software, oferecendo controle de movimentação, auditorias e geração de relatórios.
+O **AssetFlow** é um sistema de gestão de ativos patrimoniais voltado para escritórios de contabilidade. Ele permite gerenciar todo o ciclo de vida de hardwares, acessórios e licenças de software, com rastreabilidade por colaborador, sede e setor.
 
-## 🚀 Tecnologias Utilizadas
+---
 
-O projeto foi construído utilizando tecnologias modernas do ecossistema JavaScript/TypeScript, com forte foco em performance, tipagem estática e arquitetura limpa (Clean Architecture).
+## 🚀 Stack Tecnológica e Decisões Técnicas
 
-### Back-end
-- **[Bun](https://bun.sh/)**: Runtime ultrarrápido para JavaScript e TypeScript.
-- **[Hono](https://hono.dev/)**: Framework web leve e de alta performance.
-- **Arquitetura**: Clean Architecture + Domain-Driven Design (DDD).
-- **Banco de Dados**: PostgreSQL com ORM **[Prisma](https://www.prisma.io/)**.
-- **Autenticação**: JWT (JSON Web Token).
-- **Ferramentas extras**: `node-cron` para tarefas agendadas, `pdfkit` para geração de relatórios e `csv-parser`.
+Cada tecnologia foi escolhida com um motivo claro. Esta seção documenta o **porquê** de cada escolha e o que foi descartado.
 
-### Front-end
-- **[React](https://reactjs.org/)** com **[Vite](https://vitejs.dev/)**.
-- **[Tailwind CSS](https://tailwindcss.com/)**: Framework utility-first para estilização ágil e responsiva.
-- **Gerenciamento de Estado**: [Zustand](https://github.com/pmndrs/zustand).
-- **Formulários e Validação**: React Hook Form + Zod.
-- **Gráficos**: Recharts.
-- **Utilitários**: `qrcode.react` para geração de QR Codes de ativos e `axios` para consumo da API.
+---
+
+### ⚡ Runtime: Bun (em vez de Node.js)
+
+**Por quê Bun?**
+O Bun é um runtime JavaScript/TypeScript all-in-one que substitui Node.js + npm + ts-node em um único binário. Para este projeto, ele trouxe três vantagens decisivas:
+
+1. **Execução nativa de TypeScript** — sem necessidade de compilar com `tsc` ou usar `ts-node`/`tsx`. O arquivo `.ts` roda diretamente.
+2. **Velocidade** — instalação de pacotes ~20x mais rápida que npm e inicialização do servidor significativamente mais rápida.
+3. **Test runner integrado** — não precisamos do Jest ou Vitest para o backend; o `bun test` é suficiente e mais rápido.
+
+**O que foi descartado:** Node.js + ts-node. Funcionaria, mas exigiria mais configuração e seria mais lento em desenvolvimento.
+
+---
+
+### 🌐 Framework HTTP: Hono (em vez de Express ou Fastify)
+
+**Por quê Hono?**
+O Hono é um framework web minimalista construído para runtimes modernos (Bun, Deno, Cloudflare Workers). Suas vantagens:
+
+1. **Tipagem nativa** — o contexto (`c`) é totalmente tipado, o que melhora a DX.
+2. **Zero dependências** — extremamente leve, sem o bagageiro histórico do Express.
+3. **Performance** — benchmarks mostram performance superior ao Express em todos os cenários.
+4. **Middleware moderno** — CORS, JWT, validação com Zod são plug-ins nativos.
+
+**O que foi descartado:** Express (muito legado, sem suporte a TypeScript nativo), Fastify (mais complexo de configurar com Bun).
+
+---
+
+### 🗄️ Banco de Dados: PostgreSQL + Prisma ORM
+
+**Por quê PostgreSQL?**
+O projeto lida com dados relacionais complexos (Ativos → Atribuições → Usuários → Sedes → Setores). Um banco relacional garante integridade referencial via Foreign Keys — algo que bancos NoSQL (MongoDB) não oferecem nativamente. PostgreSQL também oferece suporte a transações ACID, essencial em operações de check-out/devolução de ativos.
+
+**Por quê Prisma?**
+O Prisma é o ORM que melhor integra com TypeScript. Diferente de Sequelize ou TypeORM (que têm problemas de tipos gerados automaticamente), o Prisma gera tipos precisos diretamente do `schema.prisma`. Isso significa que se você acessar `user.locationId`, o TypeScript sabe exatamente o tipo sem nenhuma configuração extra.
+
+**O que foi descartado:** MongoDB (sem joins nativos, mais difícil para relatórios financeiros), TypeORM (tipos gerados com decorators, mais verboso).
+
+---
+
+### 🔐 Autenticação: JWT (JSON Web Token)
+
+**Por quê JWT?**
+O AssetFlow é uma SPA (Single Page Application) sem SSR. O padrão de autenticação mais adequado para SPAs é o JWT stateless: após o login, o servidor assina um token com uma chave secreta (`JWT_SECRET`) e o devolve ao cliente. Nas chamadas subsequentes, o cliente inclui esse token no cabeçalho `Authorization`, e o servidor o verifica sem precisar consultar o banco de dados a cada requisição.
+
+**Como funciona na prática:**
+1. Usuário faz login → backend valida senha (hash bcrypt) → gera JWT assinado
+2. Frontend armazena o token (Zustand/localStorage)
+3. `apiClient` (Axios) injeta automaticamente `Authorization: Bearer <token>` em toda requisição
+4. O middleware `AuthMiddleware` no backend verifica a assinatura antes de processar qualquer rota protegida
+
+**O `JWT_SECRET`** pode ser qualquer string longa e aleatória. Em produção, use algo como:
+```bash
+openssl rand -base64 64
+```
+
+**O que foi descartado:** Sessions com cookies (requerem armazenamento server-side e são mais complexos em arquiteturas multi-tenant), OAuth (overkill para um sistema interno).
+
+---
+
+### 🏗️ Arquitetura: Clean Architecture + DDD
+
+**Por quê Clean Architecture?**
+O domínio de negócio (Ativo, Atribuição, Colaborador) foi isolado da infraestrutura (banco de dados, framework HTTP). Isso significa que:
+
+- Se o banco mudar de PostgreSQL para outro, só a camada `infrastructure/` muda.
+- Se o framework mudar de Hono para Express, só os controllers mudam.
+- O core de negócio pode ser testado sem mockar banco ou HTTP.
+
+```
+domain/      → Regras de negócio puras (sem dependências externas)
+application/ → Casos de uso (orquestram o domínio)
+infrastructure/ → Prisma, Hono, JWT (detalhes de implementação)
+```
+
+**O que foi descartado:** MVC simples (acopla lógica de negócio ao framework), CRUD puro sem camadas (difícil de testar e manter).
+
+---
+
+### ⚛️ Frontend: React + Vite (em vez de Next.js)
+
+**Por quê React sem Next.js?**
+O AssetFlow é uma ferramenta administrativa interna — não precisa de SEO, nem de Server-Side Rendering. Um SPA puro com React + Vite é mais simples de hospedar (qualquer servidor de arquivos estáticos) e tem DX mais rápida (HMR instantâneo com Vite).
+
+**O que foi descartado:** Next.js (SSR desnecessário para um painel admin, maior complexidade de configuração).
+
+---
+
+### 🎨 CSS: Vanilla CSS com variáveis (em vez de Tailwind)
+
+**Por quê Vanilla CSS?**
+O sistema de design do AssetFlow usa um tema dark personalizado com glassmorphism, gradientes e animações específicas. Com Tailwind, isso exigiria muitas classes customizadas ou `@apply` excessivos, perdendo as vantagens do utility-first. Com variáveis CSS nativas (`--accent-primary`, `--bg-surface`, etc.), o tema é alterável globalmente e legível.
+
+**O que foi descartado:** Tailwind (classes longas para estilos complexos e personalizados), styled-components (runtime overhead, complexidade desnecessária).
+
+---
+
+### 📦 Estado Global: Zustand (em vez de Redux ou Context API)
+
+**Por quê Zustand?**
+O estado global do frontend é simples: dados do usuário logado, toasts de notificação e modal de confirmação. Zustand resolve isso em ~10 linhas sem boilerplate de actions, reducers ou providers. Para a escala deste projeto, Redux seria exagero.
+
+**O que foi descartado:** Redux Toolkit (verboso para estado simples), Context API (re-renders desnecessários, performance inferior).
+
+---
+
+### 📊 Exportação: SheetJS (xlsx)
+
+**Por quê xlsx em vez de CSV?**
+O relatório exportado contém múltiplas entidades (Ativos, Colaboradores, Resumo Financeiro). Um arquivo `.xlsx` suporta múltiplas abas em um único arquivo, formatação e é nativamente compatível com Excel e Google Sheets. Um CSV é uma tabela plana — não comporta dados multi-dimensionais sem gerar múltiplos arquivos.
+
+---
 
 ## 📁 Estrutura do Projeto
-
-O projeto é um monorepo que utiliza os workspaces do Bun, dividindo-se entre backend e frontend.
 
 ```text
 AssetFlow/
 ├── src/                    # Backend (Clean Architecture)
-│   ├── domain/             # Entidades de negócio e interfaces de repositórios
-│   ├── application/        # Casos de Uso (Use Cases) e DTOs
-│   ├── infrastructure/     # Repositórios concretos, DB, Server HTTP, Auth
-│   └── main/               # Ponto de entrada, injeção de dependências e rotas
-├── frontend/               # Aplicação React
-│   ├── src/
-│   │   ├── components/     # Componentes de UI (Design System / Vanilla CSS + Tailwind)
-│   │   ├── pages/          # Telas da aplicação (Dashboard, Collaborators, Reports, etc)
-│   │   ├── store/          # Estado global da aplicação com Zustand
-│   │   └── api/            # Instância do Axios e integração HTTP
-├── prisma/                 # Schemas e Migrations do Banco de Dados
-├── docker-compose.yml      # Configuração do PostgreSQL em container
-└── package.json            # Configurações do Monorepo
+│   ├── domain/             # Entidades e interfaces de repositórios
+│   ├── application/        # Casos de Uso (Use Cases)
+│   ├── infrastructure/     # Prisma, Hono, JWT, Controllers
+│   └── main/               # Ponto de entrada e injeção de dependências
+├── frontend/               # SPA React + Vite
+│   └── src/
+│       ├── components/     # UI components (tabs, modais, tabelas)
+│       ├── hooks/          # Hooks reutilizáveis (useFilteredData)
+│       ├── store/          # Estado global (Zustand)
+│       └── lib/            # apiClient (Axios com interceptor JWT)
+├── prisma/                 # Schema, migrations e seeds
+├── docker-compose.yml      # PostgreSQL em container
+└── package.json            # Monorepo (Bun workspaces)
 ```
 
-## ⚙️ Como Executar o Projeto
+---
+
+## ⚙️ Como Executar
 
 ### Pré-requisitos
-Certifique-se de ter instalado em sua máquina:
-- [Bun](https://bun.sh/)
+- [Bun](https://bun.sh/) — `curl -fsSL https://bun.sh/install | bash`
 - [Docker e Docker Compose](https://www.docker.com/)
 
 ### Passo a Passo
 
-1. **Clone o repositório e instale as dependências:**
-   ```bash
-   bun install
-   ```
-   *Isso instalará as dependências tanto do back-end quanto do front-end através do workspace.*
+**1. Clone e instale as dependências:**
+```bash
+git clone https://github.com/AdrianHaelisson/assetflow.git
+cd assetflow
+bun install
+```
 
-2. **Suba o banco de dados (PostgreSQL):**
-   ```bash
-   docker-compose up -d
-   ```
+**2. Suba o banco de dados:**
+```bash
+docker-compose up -d
+```
 
-3. **Configure as Variáveis de Ambiente:**
-   Certifique-se de que o arquivo `.env` na raiz do projeto está configurado corretamente.
-   ```env
-   DATABASE_URL="postgresql://admin:password@localhost:5432/assetflow?schema=public"
-   JWT_SECRET="sua_chave_secreta_aqui"
-   ```
+**3. Configure as variáveis de ambiente:**
 
-4. **Rode as Migrations do Prisma:**
-   Isso criará as tabelas no banco de dados.
-   ```bash
-   bunx prisma migrate dev
-   ```
+Crie um arquivo `.env` na raiz com:
+```env
+DATABASE_URL="postgresql://admin:password@localhost:5432/assetflow?schema=public"
+JWT_SECRET="cole-aqui-uma-string-longa-e-aleatoria"
+```
 
-5. **Inicie os servidores (Backend e Frontend):**
-   - **Backend:**
-     No diretório raiz, execute:
-     ```bash
-     bun run dev
-     ```
-   - **Frontend:**
-     Abra uma nova aba do terminal e execute:
-     ```bash
-     cd frontend
-     bun run dev
-     ```
+> 💡 Para gerar um `JWT_SECRET` seguro: `openssl rand -base64 64`
 
-A aplicação Front-end geralmente ficará disponível em `http://localhost:5173` e a API Back-end em `http://localhost:3000`.
+**4. Rode as migrations e o seed inicial:**
+```bash
+bunx prisma migrate dev
+bun run prisma/seed.ts
+```
 
-## 🧪 Rodando Testes
-
-O projeto utiliza o test runner nativo do Bun para garantir a qualidade do código.
+**5. Inicie os servidores:**
 
 ```bash
-# Rodar todos os testes do backend (TDD e Use Cases)
+# Terminal 1 — Backend (porta 3000)
+bun run dev
+
+# Terminal 2 — Frontend (porta 5173)
+cd frontend && bun run dev
+```
+
+Acesse em: **http://localhost:5173**
+
+---
+
+## 🧪 Testes
+
+```bash
+# Backend
 bun test
 
-# Rodar testes do frontend
+# Frontend
 cd frontend
 bun run test
 bun run test:coverage
 ```
 
-## 📝 Funcionalidades Principais
-- **Gestão de Empresas (Tenants):** Arquitetura preparada para gerenciar múltiplos clientes.
-- **Controle de Acessos:** Usuários Administradores de TI e Clientes (RBAC).
-- **Gestão de Ativos (Assets):** Cadastro completo de Hardware e Software (Número de série, valor, data de compra, etc).
-- **Check-in/Check-out (Assignments):** Histórico de movimentação, vinculação e devolução de ativos aos colaboradores (users).
-- **Geração de Relatórios:** Exportação e visualização de dados via PDF e integração gráfica de estatísticas (Dashboard).
+---
 
-## 🛡️ Boas Práticas Adotadas
-- **Clean Architecture:** Independência de frameworks, banco de dados e interfaces externas. O núcleo do sistema (`domain`) é isolado.
-- **SOLID Principles:** Alto desacoplamento e responsabilidade única.
-- **Dependency Injection:** Desacoplamento através de injeção de dependências no pacote `main`.
-- **Validação com Zod:** Validação segura de ponta a ponta (tanto no payload das requisições quanto nos formulários do front-end).
+## ✨ Funcionalidades
+
+- **Inventário Unificado** — Ativos (Hardware, Software, Acessórios) com tag/patrimônio, série e QR Code únicos
+- **Atribuições (Check-out)** — Histórico completo de quem usou cada equipamento e quando
+- **Colaboradores** — Perfis com sedes, setores, kits de equipamentos e termo de responsabilidade em PDF
+- **Sedes e Setores** — Organização geográfica e departamental do inventário
+- **Relatórios** — Dashboard com gráficos de depreciação e exportação em `.xlsx` (3 abas: ativos, colaboradores, resumo financeiro)
+- **Consumíveis** — Controle de estoque de itens não rastreáveis (toner, papel, cabos)
