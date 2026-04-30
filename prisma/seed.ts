@@ -54,7 +54,7 @@ async function main() {
 
   // ─── USERS ─────────────────────────────────────────────────────
   const usersData = [
-    { id: 'u-admin', name: 'Ricardo Almeida', email: 'r.almeida@techflow.com', role: 'ADMIN', locationId: locSP.id },
+    { id: 'u-admin', name: 'Administrador', email: 'admin@assetflow.com', role: 'ADMIN', locationId: locSP.id },
     { id: 'u-ti1', name: 'Fernanda Costa', email: 'f.costa@techflow.com', role: 'TECHNICIAN', locationId: locSP.id },
     { id: 'u-ti2', name: 'Carlos Mendes', email: 'c.mendes@techflow.com', role: 'TECHNICIAN', locationId: locRJ.id },
     { id: 'u-emp1', name: 'João Silva', email: 'j.silva@techflow.com', role: 'EMPLOYEE', locationId: locSP.id },

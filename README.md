@@ -194,6 +194,38 @@ Acesse em: **http://localhost:5173**
 
 ---
 
+## 🔑 Primeiro Acesso
+
+Após rodar o seed (`bun run prisma/seed.ts`), o banco já terá um usuário administrador criado automaticamente.
+
+**Credenciais iniciais:**
+| Campo | Valor |
+|---|---|
+| **E-mail** | `admin@assetflow.com` |
+| **Senha** | `assetflow@2025` |
+
+> ⚠️ **Troque a senha após o primeiro login em produção.**
+
+### Como o JWT funciona no fluxo de login
+
+O `JWT_SECRET` **não é digitado pelo usuário** — ele é uma chave interna do servidor configurada uma única vez no `.env`. O fluxo completo é:
+
+```
+1. Você abre o navegador → http://localhost:5173
+2. Aparece a tela de login
+3. Você digita o e-mail e a senha acima
+4. O backend verifica a senha (hash bcrypt) no banco de dados
+5. Se correta → backend ASSINA um token JWT com o JWT_SECRET e o envia ao browser
+6. O browser armazena esse token (via Zustand/localStorage)
+7. Todas as chamadas à API passam o token automaticamente no header:
+   Authorization: Bearer <token>
+8. O backend verifica a assinatura do token sem precisar consultar o banco
+```
+
+**Em resumo:** o `JWT_SECRET` é como o "carimbo" do servidor. Ele gera tokens na hora do login e verifica se eles são autênticos nas chamadas seguintes. O usuário nunca o vê ou digita.
+
+---
+
 ## 🧪 Testes
 
 ```bash
