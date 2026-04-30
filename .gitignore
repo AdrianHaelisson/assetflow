@@ -1,0 +1,44 @@
+# Dependências
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+frontend/dist/
+
+# Environment variables (NUNCA subir para o GitHub)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+bun-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Bun lock (optional - manter se quiser builds reproduzíveis)
+# bun.lockb
+
+# Gemini/AI tools
+.gemini/

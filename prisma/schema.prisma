@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  cnpj      String   @unique
+  address   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  users       User[]
+  assets      Asset[]
+  locations   Location[]
+  consumables Consumable[]
+  licenses    License[]
+  accessories Accessory[]
+  components  Component[]
+  departments Department[]
+
+  @@map("companies")
+}
+
+enum LocationType {
+  BRANCH
+  OFFICE
+  STORAGE
+}
+
+model Location {
+  id        String   @id @default(uuid())
+  name      String
+  type      LocationType @default(BRANCH)
+  companyId String   @map("company_id")
+  parentId  String?  @map("parent_id")
+
+  company     Company      @relation(fields: [companyId], references: [id])
+  parent      Location?    @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children    Location[]   @relation("LocationHierarchy")
+  users       User[]
+  assets      Asset[]
+  departments Department[]
+  createdAt DateTime @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("locations")
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String
+  companyId String   @map("company_id")
+  locationId String? @map("location_id")
+
+  company     Company   @relation(fields: [companyId], references: [id])
+  location    Location? @relation(fields: [locationId], references: [id])
+  users       User[]
+  assets      Asset[]
+  createdAt DateTime @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("departments")
+}
+
+model Consumable {
+  id           String   @id @default(uuid())
+  name         String
+  quantity     Int      @default(0)
+  companyId    String   @map("company_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  company      Company  @relation(fields: [companyId], references: [id])
+
+  @@map("consumables")
+}
+
+model License {
+  id             String   @id @default(uuid())
+  name           String
+  totalSeats     Int      @map("total_seats")
+  expirationDate DateTime? @map("expiration_date")
+  isPerpetual    Boolean  @default(false) @map("is_perpetual")
+  companyId      String   @map("company_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  company     Company      @relation(fields: [companyId], references: [id])
+  assignments LicenseAssignment[]
+
+  @@map("licenses")
+}
+
+model LicenseAssignment {
+  id         String    @id @default(uuid())
+  licenseId  String    @map("license_id")
+  userId     String    @map("user_id")
+  assignedAt DateTime  @default(now()) @map("assigned_at")
+  returnedAt DateTime? @map("returned_at")
+
+  license    License @relation(fields: [licenseId], references: [id])
+  user       User    @relation(fields: [userId], references: [id])
+
+  @@map("license_assignments")
+}
+
+model Accessory {
+  id           String   @id @default(uuid())
+  name         String
+  quantity     Int      @default(0)
+  minQuantity  Int      @default(0) @map("min_quantity")
+  companyId    String   @map("company_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  company      Company  @relation(fields: [companyId], references: [id])
+  assignments  AccessoryAssignment[]
+
+  @@map("accessories")
+}
+
+model AccessoryAssignment {
+  id          String    @id @default(uuid())
+  accessoryId String    @map("accessory_id")
+  userId      String    @map("user_id")
+  assignedAt  DateTime  @default(now()) @map("assigned_at")
+  returnedAt  DateTime? @map("returned_at")
+
+  accessory   Accessory @relation(fields: [accessoryId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@map("accessory_assignments")
+}
+
+model Component {
+  id           String   @id @default(uuid())
+  name         String
+  serial       String?
+  quantity     Int      @default(0)
+  companyId    String   @map("company_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  company      Company  @relation(fields: [companyId], references: [id])
+  assignments  ComponentAssignment[]
+
+  @@map("components")
+}
+
+model ComponentAssignment {
+  id          String    @id @default(uuid())
+  componentId String    @map("component_id")
+  assetId     String    @map("asset_id") 
+  assignedAt  DateTime  @default(now()) @map("assigned_at")
+  returnedAt  DateTime? @map("returned_at")
+
+  component   Component @relation(fields: [componentId], references: [id])
+  asset       Asset     @relation(fields: [assetId], references: [id])
+
+  @@map("component_assignments")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         String
+  companyId    String   @map("company_id")
+  locationId   String?  @map("location_id")
+  departmentId String?  @map("department_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  company             Company               @relation(fields: [companyId], references: [id])
+  location            Location?             @relation(fields: [locationId], references: [id])
+  department          Department?           @relation(fields: [departmentId], references: [id])
+  assignments         Assignment[]
+  licenseAssigns      LicenseAssignment[]
+  accessoryAssigns    AccessoryAssignment[]
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+model Asset {
+  id                 String   @id @default(uuid())
+  type               String
+  tagNumber          String   @unique @map("tag_number")
+  model              String
+  serial             String
+  purchaseDate       DateTime @map("purchase_date")
+  value              Float
+  status             String
+  companyId          String   @map("company_id")
+  locationId         String?  @map("location_id")
+  departmentId       String?  @map("department_id")
+  depreciationMonths Int?     @map("depreciation_months")
+  createdAt          DateTime @default(now()) @map("created_at")
+  deletedAt          DateTime? @map("deleted_at")
+  nextAuditDate      DateTime? @map("next_audit_date")
+  customAttributes   Json?     @map("custom_attributes")
+
+  company            Company               @relation(fields: [companyId], references: [id])
+  location           Location?             @relation(fields: [locationId], references: [id])
+  department         Department?           @relation(fields: [departmentId], references: [id])
+  assignments        Assignment[]
+  componentAssigns   ComponentAssignment[]
+  maintenances       AssetMaintenance[]
+  auditLogs          AuditLog[]
+
+  @@map("assets")
+}
+
+model Assignment {
+  id         String    @id @default(uuid())
+  assetId    String    @map("asset_id")
+  userId     String    @map("user_id")
+  assignedAt DateTime  @default(now()) @map("assigned_at")
+  returnedAt DateTime? @map("returned_at")
+
+  asset Asset @relation(fields: [assetId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  @@map("assignments")
+}
+
+model AssetMaintenance {
+  id        String    @id @default(uuid())
+  title     String
+  cost      Float     @default(0)
+  provider  String?
+  startDate DateTime  @default(now()) @map("start_date")
+  endDate   DateTime? @map("end_date")
+  assetId   String    @map("asset_id")
+
+  asset     Asset     @relation(fields: [assetId], references: [id])
+
+  @@map("asset_maintenances")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  assetId   String   @map("asset_id")
+  userId    String   @map("user_id")
+  date      DateTime @default(now())
+
+  asset     Asset    @relation(fields: [assetId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model SystemLog {
+  id         String   @id @default(uuid())
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  userId     String?  @map("user_id")
+  changes    Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("system_logs")
+}
